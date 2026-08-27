@@ -1350,6 +1350,34 @@
   </div>
   
   <script>
+    // ==================== KONFIGURASI ====================
+    var WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxp5PUIIPMgcYi9cV7WQlystlc9__cJpL84CqTYKTdExiYL-PywTwbGGK9blr64rYTuJA/exec';
+    
+    // ==================== FUNGSI FETCH ====================
+    function callServer(action, data, callback) {
+      var url = WEBAPP_URL + '?action=' + encodeURIComponent(action) + '&data=' + encodeURIComponent(JSON.stringify(data));
+      
+      fetch(url, {
+        method: 'GET',
+        mode: 'cors'
+      })
+      .then(function(response) {
+        return response.text();
+      })
+      .then(function(result) {
+        try {
+          var parsed = JSON.parse(result);
+          callback(parsed);
+        } catch(e) {
+          callback({ success: false, error: 'Gagal parse response: ' + e.message });
+        }
+      })
+      .catch(function(error) {
+        console.error('Error callServer:', error);
+        callback({ success: false, error: error.message });
+      });
+    }
+    
     // ==================== UTILITY FUNCTIONS ====================
     function formatTanggalDisplay(tanggal, withTime) {
       if (!tanggal) return '-';
@@ -1485,7 +1513,7 @@
         toast.style.opacity = '0';
         toast.style.transition = 'opacity 0.3s ease';
         setTimeout(function() { toast.remove(); }, 300);
-      }, 1500);
+      }, 3000);
     }
     
     function togglePassword(inputId, button) {
@@ -1620,56 +1648,46 @@
         if (savedUser) {
           currentUser = JSON.parse(savedUser);
           console.log('📋 User ditemukan di localStorage:', currentUser.username);
-          google.script.run
-            .withSuccessHandler(function(result) {
-              if (result && result.valid) {
-                console.log('✅ Session valid untuk:', currentUser.nama);
-                var app = document.getElementById('app');
-                var loginPage = document.getElementById('loginPage');
-                if (app) app.style.display = 'block';
-                if (loginPage) loginPage.style.display = 'none';
-                var currentUserEl = document.getElementById('currentUser');
-                var currentRoleEl = document.getElementById('currentRole');
-                if (currentUserEl) currentUserEl.textContent = currentUser.nama;
-                if (currentRoleEl) currentRoleEl.textContent = '(' + currentUser.role + ')';
-                setupFilters();
-                var today = getTodayString();
-                var filterTanggal = document.getElementById('filterTanggal');
-                if (filterTanggal) filterTanggal.value = today;
-                var savedPosTanggal = localStorage.getItem('pos_tanggal');
-                if (savedPosTanggal) {
-                  var posTanggal = document.getElementById('tanggalTransaksi');
-                  if (posTanggal) posTanggal.value = savedPosTanggal;
-                }
-                var savedStokTanggal = localStorage.getItem('stok_tanggal');
-                if (savedStokTanggal) {
-                  var stokTanggal = document.getElementById('tanggalStokMasuk');
-                  if (stokTanggal) stokTanggal.value = savedStokTanggal;
-                }
-                loadAllData();
-                updateHeaderInfo();
-                console.log('✅ Semua data dimuat');
-              } else {
-                console.log('❌ Session tidak valid');
-                localStorage.removeItem('pos_user');
-                currentUser = null;
-                var app = document.getElementById('app');
-                var loginPage = document.getElementById('loginPage');
-                if (app) app.style.display = 'none';
-                if (loginPage) loginPage.style.display = 'block';
+          
+          // Verifikasi session via server
+          callServer('verifySession', { username: currentUser.username }, function(result) {
+            if (result && result.valid) {
+              console.log('✅ Session valid untuk:', currentUser.nama);
+              var app = document.getElementById('app');
+              var loginPage = document.getElementById('loginPage');
+              if (app) app.style.display = 'block';
+              if (loginPage) loginPage.style.display = 'none';
+              var currentUserEl = document.getElementById('currentUser');
+              var currentRoleEl = document.getElementById('currentRole');
+              if (currentUserEl) currentUserEl.textContent = currentUser.nama;
+              if (currentRoleEl) currentRoleEl.textContent = '(' + currentUser.role + ')';
+              setupFilters();
+              var today = getTodayString();
+              var filterTanggal = document.getElementById('filterTanggal');
+              if (filterTanggal) filterTanggal.value = today;
+              var savedPosTanggal = localStorage.getItem('pos_tanggal');
+              if (savedPosTanggal) {
+                var posTanggal = document.getElementById('tanggalTransaksi');
+                if (posTanggal) posTanggal.value = savedPosTanggal;
               }
-            })
-            .withFailureHandler(function(error) {
-              console.error('❌ Error verifySession:', error);
+              var savedStokTanggal = localStorage.getItem('stok_tanggal');
+              if (savedStokTanggal) {
+                var stokTanggal = document.getElementById('tanggalStokMasuk');
+                if (stokTanggal) stokTanggal.value = savedStokTanggal;
+              }
+              loadAllData();
+              updateHeaderInfo();
+              console.log('✅ Semua data dimuat');
+            } else {
+              console.log('❌ Session tidak valid');
               localStorage.removeItem('pos_user');
               currentUser = null;
               var app = document.getElementById('app');
               var loginPage = document.getElementById('loginPage');
               if (app) app.style.display = 'none';
               if (loginPage) loginPage.style.display = 'block';
-              showToast('❌ Gagal verifikasi session: ' + error.message, 'error');
-            })
-            .verifySession(currentUser ? currentUser.username : '');
+            }
+          });
         } else {
           console.log('ℹ️ Tidak ada session tersimpan');
           var app = document.getElementById('app');
@@ -1716,49 +1734,41 @@
       btn.textContent = '⏳ Memproses...';
       btn.disabled = true;
       
-      google.script.run
-        .withSuccessHandler(function(result) {
-          btn.textContent = 'Login';
-          btn.disabled = false;
-          if (result.success) {
-            currentUser = result.user;
-            localStorage.setItem('pos_user', JSON.stringify(currentUser));
-            var app = document.getElementById('app');
-            var loginPage = document.getElementById('loginPage');
-            if (app) app.style.display = 'block';
-            if (loginPage) loginPage.style.display = 'none';
-            var currentUserEl = document.getElementById('currentUser');
-            var currentRoleEl = document.getElementById('currentRole');
-            if (currentUserEl) currentUserEl.textContent = currentUser.nama;
-            if (currentRoleEl) currentRoleEl.textContent = '(' + currentUser.role + ')';
-            setupFilters();
-            var today = getTodayString();
-            var filterTanggal = document.getElementById('filterTanggal');
-            if (filterTanggal) filterTanggal.value = today;
-            var savedPosTanggal = localStorage.getItem('pos_tanggal');
-            if (savedPosTanggal) {
-              var posTanggal = document.getElementById('tanggalTransaksi');
-              if (posTanggal) posTanggal.value = savedPosTanggal;
-            }
-            var savedStokTanggal = localStorage.getItem('stok_tanggal');
-            if (savedStokTanggal) {
-              var stokTanggal = document.getElementById('tanggalStokMasuk');
-              if (stokTanggal) stokTanggal.value = savedStokTanggal;
-            }
-            loadAllData();
-            updateHeaderInfo();
-            showToast('✅ Login berhasil! Selamat datang ' + currentUser.nama);
-          } else {
-            showToast('❌ ' + (result.message || 'Login gagal!'), 'error');
+      callServer('login', { username: username, password: password }, function(result) {
+        btn.textContent = 'Login';
+        btn.disabled = false;
+        if (result.success) {
+          currentUser = result.user;
+          localStorage.setItem('pos_user', JSON.stringify(currentUser));
+          var app = document.getElementById('app');
+          var loginPage = document.getElementById('loginPage');
+          if (app) app.style.display = 'block';
+          if (loginPage) loginPage.style.display = 'none';
+          var currentUserEl = document.getElementById('currentUser');
+          var currentRoleEl = document.getElementById('currentRole');
+          if (currentUserEl) currentUserEl.textContent = currentUser.nama;
+          if (currentRoleEl) currentRoleEl.textContent = '(' + currentUser.role + ')';
+          setupFilters();
+          var today = getTodayString();
+          var filterTanggal = document.getElementById('filterTanggal');
+          if (filterTanggal) filterTanggal.value = today;
+          var savedPosTanggal = localStorage.getItem('pos_tanggal');
+          if (savedPosTanggal) {
+            var posTanggal = document.getElementById('tanggalTransaksi');
+            if (posTanggal) posTanggal.value = savedPosTanggal;
           }
-        })
-        .withFailureHandler(function(error) {
-          btn.textContent = 'Login';
-          btn.disabled = false;
-          console.error('Login error:', error);
-          showToast('❌ Error: ' + error.message, 'error');
-        })
-        .login(username, password);
+          var savedStokTanggal = localStorage.getItem('stok_tanggal');
+          if (savedStokTanggal) {
+            var stokTanggal = document.getElementById('tanggalStokMasuk');
+            if (stokTanggal) stokTanggal.value = savedStokTanggal;
+          }
+          loadAllData();
+          updateHeaderInfo();
+          showToast('✅ Login berhasil! Selamat datang ' + currentUser.nama);
+        } else {
+          showToast('❌ ' + (result.message || 'Login gagal!'), 'error');
+        }
+      });
     });
     
     // ==================== AUTH - REGISTER ====================
@@ -1783,28 +1793,21 @@
       var btn = document.getElementById('btnRegister');
       btn.textContent = '⏳ Memproses...';
       btn.disabled = true;
-      google.script.run
-        .withSuccessHandler(function(result) {
-          btn.textContent = 'Daftar';
-          btn.disabled = false;
-          if (result.success) {
-            showToast('✅ Registrasi berhasil! Silakan login.', 'success');
-            showLogin();
-            document.getElementById('regUsername').value = '';
-            document.getElementById('regPassword').value = '';
-            document.getElementById('regConfirmPassword').value = '';
-            document.getElementById('regNama').value = '';
-          } else {
-            showToast('❌ ' + (result.message || 'Registrasi gagal!'), 'error');
-          }
-        })
-        .withFailureHandler(function(error) {
-          btn.textContent = 'Daftar';
-          btn.disabled = false;
-          console.error('Register error:', error);
-          showToast('❌ Error: ' + error.message, 'error');
-        })
-        .registerUser(username, password, nama);
+      
+      callServer('registerUser', { username: username, password: password, nama: nama }, function(result) {
+        btn.textContent = 'Daftar';
+        btn.disabled = false;
+        if (result.success) {
+          showToast('✅ Registrasi berhasil! Silakan login.', 'success');
+          showLogin();
+          document.getElementById('regUsername').value = '';
+          document.getElementById('regPassword').value = '';
+          document.getElementById('regConfirmPassword').value = '';
+          document.getElementById('regNama').value = '';
+        } else {
+          showToast('❌ ' + (result.message || 'Registrasi gagal!'), 'error');
+        }
+      });
     });
     
     // ==================== EVENT LISTENERS ====================
@@ -1909,40 +1912,36 @@
     }
     
     function loadKasirList() {
-      google.script.run
-        .withSuccessHandler(function(users) {
-          allUsers = users || [];
-          var filterKasir = document.getElementById('filterKasir');
-          if (!filterKasir) return;
-          filterKasir.innerHTML = '<option value="all">Semua Kasir</option>';
-          for (var i = 0; i < allUsers.length; i++) {
-            if (allUsers[i].role === 'kasir' && allUsers[i].active !== false) {
-              var opt = document.createElement('option');
-              opt.value = allUsers[i].nama || allUsers[i].username;
-              opt.textContent = allUsers[i].nama || allUsers[i].username;
-              filterKasir.appendChild(opt);
-            }
+      callServer('getUsers', {}, function(users) {
+        allUsers = users || [];
+        var filterKasir = document.getElementById('filterKasir');
+        if (!filterKasir) return;
+        filterKasir.innerHTML = '<option value="all">Semua Kasir</option>';
+        for (var i = 0; i < allUsers.length; i++) {
+          if (allUsers[i].role === 'kasir' && allUsers[i].active !== false) {
+            var opt = document.createElement('option');
+            opt.value = allUsers[i].nama || allUsers[i].username;
+            opt.textContent = allUsers[i].nama || allUsers[i].username;
+            filterKasir.appendChild(opt);
           }
-        })
-        .getUsers();
+        }
+      });
     }
     
     // ==================== UPDATE HEADER INFO ====================
     function updateHeaderInfo() {
-      google.script.run
-        .withSuccessHandler(function(data) {
-          if (data && data.namaToko) {
-            var header = document.getElementById('headerTitle');
-            if (header) {
-              header.textContent = '🛒 ' + data.namaToko;
-            }
-            var loginTitle = document.getElementById('loginTitle');
-            if (loginTitle) {
-              loginTitle.textContent = '🛒 ' + data.namaToko;
-            }
+      callServer('getInfoToko', {}, function(data) {
+        if (data && data.namaToko) {
+          var header = document.getElementById('headerTitle');
+          if (header) {
+            header.textContent = '🛒 ' + data.namaToko;
           }
-        })
-        .getInfoToko();
+          var loginTitle = document.getElementById('loginTitle');
+          if (loginTitle) {
+            loginTitle.textContent = '🛒 ' + data.namaToko;
+          }
+        }
+      });
     }
     
     // ==================== LOAD ALL DATA ====================
@@ -2084,54 +2083,30 @@
       document.getElementById('bulananTotal').textContent = '⏳ Memuat total...';
       document.getElementById('lowStockList').innerHTML = '⏳ Memuat data stok...';
       
-      google.script.run
-        .withSuccessHandler(function(data) {
-          console.log('📊 Dashboard data received:', data);
-          document.getElementById('keuntunganHari').textContent = formatRupiah(data.keuntunganHariIni || 0);
-          document.getElementById('penjualanHari').textContent = formatRupiah(data.penjualanHariIni || 0);
-          document.getElementById('quantityHari').textContent = data.quantityHari || 0;
-          document.getElementById('totalTransaksi').textContent = data.totalTransaksi || 0;
-          document.getElementById('keuntunganBulan').textContent = formatRupiah(data.keuntunganBulan || 0);
-          document.getElementById('stokRendah').textContent = data.stokRendah || 0;
-          document.getElementById('totalProduk').textContent = data.totalProduk || 0;
-          var transSub = document.getElementById('transSub');
-          if (transSub) transSub.textContent = data.totalTransaksi + ' transaksi';
-          resetRefreshButton();
+      callServer('getDashboardDataBulanan', { tanggal: tanggal, kasirFilter: kasir, namaUser: namaUser, role: role }, function(data) {
+        console.log('📊 Dashboard data received:', data);
+        document.getElementById('keuntunganHari').textContent = formatRupiah(data.keuntunganHariIni || 0);
+        document.getElementById('penjualanHari').textContent = formatRupiah(data.penjualanHariIni || 0);
+        document.getElementById('quantityHari').textContent = data.quantityHari || 0;
+        document.getElementById('totalTransaksi').textContent = data.totalTransaksi || 0;
+        document.getElementById('keuntunganBulan').textContent = formatRupiah(data.keuntunganBulan || 0);
+        document.getElementById('stokRendah').textContent = data.stokRendah || 0;
+        document.getElementById('totalProduk').textContent = data.totalProduk || 0;
+        var transSub = document.getElementById('transSub');
+        if (transSub) transSub.textContent = data.totalTransaksi + ' transaksi';
+        resetRefreshButton();
+        
+        // Load low stock
+        callServer('getProduk', {}, function(produk) {
+          var lowStock = produk.filter(function(p) { return parseInt(p.Stok) <= parseInt(p['Minimum Stok'] || 0); });
+          var container = document.getElementById('lowStockList');
+          if (lowStock.length === 0) { container.innerHTML = '✅ Semua produk stok aman'; }
+          else { var html = ''; for (var i = 0; i < lowStock.length; i++) { html += '⚠️ ' + lowStock[i]['Nama Produk'] + ' - Stok: ' + lowStock[i].Stok + ' ' + (lowStock[i].Satuan || 'pcs') + '<br>'; } container.innerHTML = html; }
+        });
           
-          // Load low stock
-          google.script.run
-            .withSuccessHandler(function(produk) {
-              var lowStock = produk.filter(function(p) { return parseInt(p.Stok) <= parseInt(p['Minimum Stok'] || 0); });
-              var container = document.getElementById('lowStockList');
-              if (lowStock.length === 0) { container.innerHTML = '✅ Semua produk stok aman'; }
-              else { var html = ''; for (var i = 0; i < lowStock.length; i++) { html += '⚠️ ' + lowStock[i]['Nama Produk'] + ' - Stok: ' + lowStock[i].Stok + ' ' + (lowStock[i].Satuan || 'pcs') + '<br>'; } container.innerHTML = html; }
-            })
-            .withFailureHandler(function(error) { 
-              console.error('Error load low stock:', error); 
-              document.getElementById('lowStockList').innerHTML = '❌ Gagal memuat data stok';
-              resetRefreshButton();
-            })
-            .getProduk();
-            
-          // Load chart
-          loadBulananChart(tanggal, kasir, namaUser, role);
-        })
-        .withFailureHandler(function(error) {
-          console.error('Error loadDashboard:', error);
-          document.getElementById('keuntunganHari').textContent = '❌ Error';
-          document.getElementById('penjualanHari').textContent = '❌ Error';
-          document.getElementById('quantityHari').textContent = '❌';
-          document.getElementById('totalTransaksi').textContent = '❌';
-          document.getElementById('keuntunganBulan').textContent = '❌';
-          document.getElementById('stokRendah').textContent = '❌';
-          document.getElementById('totalProduk').textContent = '❌';
-          document.getElementById('bulananLegend').innerHTML = '❌ Gagal memuat grafik';
-          document.getElementById('bulananTotal').textContent = 'Total: Rp 0';
-          document.getElementById('lowStockList').innerHTML = '❌ Gagal memuat data stok';
-          showToast('❌ Gagal memuat dashboard: ' + error.message, 'error');
-          resetRefreshButton();
-        })
-        .getDashboardDataBulanan(tanggal, kasir, namaUser, role);
+        // Load chart
+        loadBulananChart(tanggal, kasir, namaUser, role);
+      });
     }
     
     // ==================== LOAD CHART - BULANAN ====================
@@ -2143,87 +2118,80 @@
       document.getElementById('bulananLegend').innerHTML = '⏳ Memuat grafik...';
       document.getElementById('bulananTotal').textContent = '⏳ Memuat total...';
       
-      google.script.run
-        .withSuccessHandler(function(data) {
-          var labels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
-          var datasets = [];
-          var totalAll = 0;
-          var kasirNames = Object.keys(data);
-          var colorIndex = 0;
+      callServer('getPenjualanBulananPerKasir', { bulan: bulan, tahun: tahun, kasirFilter: kasirFilter, namaUser: namaUser, role: role }, function(data) {
+        var labels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
+        var datasets = [];
+        var totalAll = 0;
+        var kasirNames = Object.keys(data);
+        var colorIndex = 0;
+        
+        for (var i = 0; i < kasirNames.length; i++) {
+          var namaKasir = kasirNames[i];
+          var values = data[namaKasir] || [];
+          while (values.length < 12) values.push(0);
+          var sum = values.reduce(function(a, b) { return a + b; }, 0);
+          totalAll += sum;
           
-          for (var i = 0; i < kasirNames.length; i++) {
-            var namaKasir = kasirNames[i];
-            var values = data[namaKasir] || [];
-            while (values.length < 12) values.push(0);
-            var sum = values.reduce(function(a, b) { return a + b; }, 0);
-            totalAll += sum;
-            
-            datasets.push({
-              label: namaKasir,
-              data: values,
-              backgroundColor: chartColors[colorIndex % chartColors.length] + '80',
-              borderColor: chartColors[colorIndex % chartColors.length],
-              borderWidth: 1
-            });
-            colorIndex++;
-          }
-          
-          var ctx = document.getElementById('penjualanBulananChart').getContext('2d');
-          if (penjualanBulananChart) { penjualanBulananChart.destroy(); }
-          
-          if (datasets.length === 0 || totalAll === 0) {
-            document.getElementById('bulananLegend').innerHTML = '<span style="color:#999;">Belum ada data penjualan</span>';
-            document.getElementById('bulananTotal').textContent = 'Total: Rp 0';
-            return;
-          }
-          
-          penjualanBulananChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-              labels: labels,
-              datasets: datasets
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: { display: false },
-                tooltip: {
-                  callbacks: {
-                    label: function(context) {
-                      return context.dataset.label + ': ' + formatRupiah(context.parsed.y);
-                    }
+          datasets.push({
+            label: namaKasir,
+            data: values,
+            backgroundColor: chartColors[colorIndex % chartColors.length] + '80',
+            borderColor: chartColors[colorIndex % chartColors.length],
+            borderWidth: 1
+          });
+          colorIndex++;
+        }
+        
+        var ctx = document.getElementById('penjualanBulananChart').getContext('2d');
+        if (penjualanBulananChart) { penjualanBulananChart.destroy(); }
+        
+        if (datasets.length === 0 || totalAll === 0) {
+          document.getElementById('bulananLegend').innerHTML = '<span style="color:#999;">Belum ada data penjualan</span>';
+          document.getElementById('bulananTotal').textContent = 'Total: Rp 0';
+          return;
+        }
+        
+        penjualanBulananChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: datasets
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    return context.dataset.label + ': ' + formatRupiah(context.parsed.y);
                   }
                 }
-              },
-              scales: {
-                x: { stacked: true },
-                y: { 
-                  stacked: true,
-                  beginAtZero: true,
-                  ticks: { callback: function(value) { if (value >= 1000000) return 'Rp ' + (value/1000000).toFixed(1) + 'Jt'; else if (value >= 1000) return 'Rp ' + (value/1000).toFixed(0) + 'K'; return 'Rp ' + value; } }
-                }
+              }
+            },
+            scales: {
+              x: { stacked: true },
+              y: { 
+                stacked: true,
+                beginAtZero: true,
+                ticks: { callback: function(value) { if (value >= 1000000) return 'Rp ' + (value/1000000).toFixed(1) + 'Jt'; else if (value >= 1000) return 'Rp ' + (value/1000).toFixed(0) + 'K'; return 'Rp ' + value; } }
               }
             }
-          });
-          
-          // Legend
-          var legendHtml = '';
-          for (var i = 0; i < datasets.length; i++) {
-            var d = datasets[i];
-            var sum = d.data.reduce(function(a,b) { return a + b; }, 0);
-            var persen = totalAll > 0 ? ((sum / totalAll) * 100).toFixed(1) : 0;
-            legendHtml += '<span class="legend-item"><span class="legend-color" style="background:' + d.backgroundColor + '"></span>' + d.label + ' (' + persen + '%)</span>';
           }
-          document.getElementById('bulananLegend').innerHTML = legendHtml;
-          document.getElementById('bulananTotal').textContent = 'Total: ' + formatRupiah(totalAll);
-        })
-        .withFailureHandler(function(error) {
-          console.error('Error loadBulananChart:', error);
-          document.getElementById('bulananLegend').innerHTML = '❌ Gagal memuat grafik';
-          document.getElementById('bulananTotal').textContent = 'Total: Rp 0';
-        })
-        .getPenjualanBulananPerKasir(bulan, tahun, kasirFilter, namaUser, role);
+        });
+        
+        // Legend
+        var legendHtml = '';
+        for (var i = 0; i < datasets.length; i++) {
+          var d = datasets[i];
+          var sum = d.data.reduce(function(a,b) { return a + b; }, 0);
+          var persen = totalAll > 0 ? ((sum / totalAll) * 100).toFixed(1) : 0;
+          legendHtml += '<span class="legend-item"><span class="legend-color" style="background:' + d.backgroundColor + '"></span>' + d.label + ' (' + persen + '%)</span>';
+        }
+        document.getElementById('bulananLegend').innerHTML = legendHtml;
+        document.getElementById('bulananTotal').textContent = 'Total: ' + formatRupiah(totalAll);
+      });
     }
     
     // ==================== POS FUNCTIONS ====================
@@ -2237,58 +2205,48 @@
       
       container.innerHTML = '<p style="color:#999;text-align:center;grid-column:1/-1;">⏳ Memuat produk...</p>';
       
-      google.script.run
-        .withSuccessHandler(function(produk) {
-          console.log('✅ Data produk POS diterima:', produk);
-          produkList = produk || [];
-          var container = document.getElementById('posProducts');
-          if (!container) return;
-          
-          if (produkList.length === 0) {
-            container.innerHTML = '<p style="color:#999;text-align:center;grid-column:1/-1;">📭 Belum ada produk</p>';
-            return;
-          }
-          
-          var html = '';
-          var hasDate = getTanggalTransaksi() !== '';
-          var processedKode = {};
-          
-          for (var i = 0; i < produkList.length; i++) {
-            var p = produkList[i];
-            if (processedKode[p.Kode]) continue;
-            processedKode[p.Kode] = true;
+      callServer('getProduk', {}, function(produk) {
+        console.log('✅ Data produk POS diterima:', produk);
+        produkList = produk || [];
+        var container = document.getElementById('posProducts');
+        if (!container) return;
+        
+        if (produkList.length === 0) {
+          container.innerHTML = '<p style="color:#999;text-align:center;grid-column:1/-1;">📭 Belum ada produk</p>';
+          return;
+        }
+        
+        var html = '';
+        var hasDate = getTanggalTransaksi() !== '';
+        var processedKode = {};
+        
+        for (var i = 0; i < produkList.length; i++) {
+          var p = produkList[i];
+          if (processedKode[p.Kode]) continue;
+          processedKode[p.Kode] = true;
 
-            var stok = parseInt(p.Stok) || 0;
-            var isOutOfStock = stok <= 0;
-            var disabledClass = isOutOfStock ? 'disabled' : '';
-            var posDisabledClass = !hasDate ? 'pos-disabled' : '';
-            var stockClass = isOutOfStock ? 'out-of-stock' : '';
-            var onclickAttr = (isOutOfStock || !hasDate) ? '' : 'onclick="addToCart(\'' + p.Kode + '\')"';
-            var imgHtml = getProductImage(p['URL Gambar'], p['Nama Produk']);
-            
-            html += '<div class="product-item ' + disabledClass + ' ' + posDisabledClass + '" ' + onclickAttr + '>' +
-                      imgHtml +
-                      (isOutOfStock ? '<div class="badge-out-of-stock">⛔ HABIS</div>' : '') +
-                      (!hasDate ? '<div class="badge-out-of-stock" style="background:#ff9800;">📅 Pilih Tanggal</div>' : '') +
-                      '<div class="name">' + (p['Nama Produk'] || '-') + '</div>' +
-                      '<div class="price">' + formatRupiah(p['Harga Jual'] || 0) + '</div>' +
-                      '<div class="stock ' + stockClass + '">Stok: ' + stok + ' ' + (p.Satuan || 'pcs') + '</div>' +
-                    '</div>';
-          }
+          var stok = parseInt(p.Stok) || 0;
+          var isOutOfStock = stok <= 0;
+          var disabledClass = isOutOfStock ? 'disabled' : '';
+          var posDisabledClass = !hasDate ? 'pos-disabled' : '';
+          var stockClass = isOutOfStock ? 'out-of-stock' : '';
+          var onclickAttr = (isOutOfStock || !hasDate) ? '' : 'onclick="addToCart(\'' + p.Kode + '\')"';
+          var imgHtml = getProductImage(p['URL Gambar'], p['Nama Produk']);
           
-          container.innerHTML = html;
-          updatePosUI();
-          console.log('✅ Produk POS berhasil ditampilkan: ' + produkList.length + ' produk');
-        })
-        .withFailureHandler(function(error) {
-          console.error('❌ Error loadPosProduk:', error);
-          var container = document.getElementById('posProducts');
-          if (container) {
-            container.innerHTML = '<p style="color:red;text-align:center;grid-column:1/-1;">❌ Gagal memuat produk: ' + error.message + '</p>';
-          }
-          showToast('❌ Gagal memuat produk POS: ' + error.message, 'error');
-        })
-        .getProduk();
+          html += '<div class="product-item ' + disabledClass + ' ' + posDisabledClass + '" ' + onclickAttr + '>' +
+                    imgHtml +
+                    (isOutOfStock ? '<div class="badge-out-of-stock">⛔ HABIS</div>' : '') +
+                    (!hasDate ? '<div class="badge-out-of-stock" style="background:#ff9800;">📅 Pilih Tanggal</div>' : '') +
+                    '<div class="name">' + (p['Nama Produk'] || '-') + '</div>' +
+                    '<div class="price">' + formatRupiah(p['Harga Jual'] || 0) + '</div>' +
+                    '<div class="stock ' + stockClass + '">Stok: ' + stok + ' ' + (p.Satuan || 'pcs') + '</div>' +
+                  '</div>';
+        }
+        
+        container.innerHTML = html;
+        updatePosUI();
+        console.log('✅ Produk POS berhasil ditampilkan: ' + produkList.length + ' produk');
+      });
     }
     
     // ==================== FUNGSI CART ====================
@@ -2684,46 +2642,37 @@
         items: itemsForStruk
       };
       
-      google.script.run
-        .withSuccessHandler(function(result) {
-          _isProcessingPayment = false;
-          enablePaymentButtons();
+      callServer('simpanTransaksiFIFO', { transaksi: transaksi, detailTransaksi: detailTransaksi }, function(result) {
+        _isProcessingPayment = false;
+        enablePaymentButtons();
+        
+        if (result.success) {
+          currentTransaksiData.id = result.id;
+          showToast('✅ Transaksi berhasil! ID: ' + result.id, 'success');
           
-          if (result.success) {
-            currentTransaksiData.id = result.id;
-            showToast('✅ Transaksi berhasil! ID: ' + result.id, 'success');
-            
-            document.getElementById('namaPembeli').value = '';
-            
-            currentCart = [];
-            updateCartDisplay();
-            
-            loadPosProduk();
-            loadDashboard();
-            loadTransaksi();
-            loadStokProdukSelect();
-            loadBatchList();
-            loadBatchUntukDibatalkan();
-            
-            if (print) {
-              showStruk(currentTransaksiData, false);
-              closeModal();
-            } else {
-              closeModal();
-            }
+          document.getElementById('namaPembeli').value = '';
+          
+          currentCart = [];
+          updateCartDisplay();
+          
+          loadPosProduk();
+          loadDashboard();
+          loadTransaksi();
+          loadStokProdukSelect();
+          loadBatchList();
+          loadBatchUntukDibatalkan();
+          
+          if (print) {
+            showStruk(currentTransaksiData, false);
+            closeModal();
           } else {
-            showToast('❌ Gagal menyimpan transaksi: ' + (result.error || ''), 'error');
             closeModal();
           }
-        })
-        .withFailureHandler(function(error) {
-          _isProcessingPayment = false;
-          enablePaymentButtons();
-          console.error('❌ Error:', error);
-          showToast('❌ Error: ' + error.message, 'error');
+        } else {
+          showToast('❌ Gagal menyimpan transaksi: ' + (result.error || ''), 'error');
           closeModal();
-        })
-        .simpanTransaksiFIFO(transaksi, detailTransaksi);
+        }
+      });
     }
     
     // ==================== STRUK ====================
@@ -2742,8 +2691,17 @@
       for (var i = 0; i < items.length; i++) { var qty = parseInt(items[i].qty) || 0; totalQty += qty; }
       var tanggalDisplay = formatTanggalDisplay(tanggal) + ' ' + waktu;
       
-      // Get info toko
-      var infoToko = getInfoTokoSync();
+      // Get info toko from localStorage
+      var infoToko = { namaToko: '', alamat: '', noHp: '' };
+      var cached = localStorage.getItem('info_toko');
+      if (cached) {
+        try {
+          var parsed = JSON.parse(cached);
+          if (parsed && parsed.namaToko) {
+            infoToko = parsed;
+          }
+        } catch(e) {}
+      }
       
       var html = '<div class="struk-container" id="strukContent">';
       html += '<div class="header-struk">';
@@ -2771,30 +2729,6 @@
       
       html += '<div class="struk-actions"><button class="btn btn-success" onclick="printStruk()">🖨️ Cetak</button><button class="btn btn-info" onclick="downloadStrukPDF()">📄 Download PDF</button><button class="btn btn-danger" onclick="closeModal()">✖ Tutup</button></div>';
       return html;
-    }
-    
-    function getInfoTokoSync() {
-      var result = { namaToko: '', alamat: '', noHp: '' };
-      // Try to get from localStorage cache first
-      var cached = localStorage.getItem('info_toko');
-      if (cached) {
-        try {
-          var parsed = JSON.parse(cached);
-          if (parsed && parsed.namaToko) {
-            return parsed;
-          }
-        } catch(e) {}
-      }
-      // If not cached, make sync call (will use the async result on next load)
-      google.script.run
-        .withSuccessHandler(function(data) {
-          if (data) {
-            localStorage.setItem('info_toko', JSON.stringify(data));
-            result = data;
-          }
-        })
-        .getInfoToko();
-      return result;
     }
     
     function printStruk() {
@@ -2840,34 +2774,24 @@
       
       select.innerHTML = '<option value="">⏳ Memuat produk...</option>';
       
-      google.script.run
-        .withSuccessHandler(function(produk) {
-          console.log('✅ Data produk Stok Masuk diterima:', produk);
-          produkList = produk || [];
-          var select = document.getElementById('selectProdukStok');
-          if (!select) return;
-          var previousValue = select.value;
-          select.innerHTML = '<option value="">-- Pilih Produk --</option>';
-          for (var i = 0; i < produkList.length; i++) {
-            var p = produkList[i];
-            var opt = document.createElement('option');
-            opt.value = p.Kode;
-            opt.textContent = p.Kode + ' - ' + p['Nama Produk'] + ' (Stok: ' + (p.Stok || 0) + ')';
-            select.appendChild(opt);
-          }
-          if (previousValue) select.value = previousValue;
-          if (select.value) loadStokInfo();
-          else document.getElementById('stokInfo').style.display = 'none';
-        })
-        .withFailureHandler(function(error) {
-          console.error('❌ Error loadStokProdukSelect:', error);
-          var select = document.getElementById('selectProdukStok');
-          if (select) {
-            select.innerHTML = '<option value="">❌ Gagal memuat produk</option>';
-          }
-          showToast('❌ Gagal memuat produk: ' + error.message, 'error');
-        })
-        .getProduk();
+      callServer('getProduk', {}, function(produk) {
+        console.log('✅ Data produk Stok Masuk diterima:', produk);
+        produkList = produk || [];
+        var select = document.getElementById('selectProdukStok');
+        if (!select) return;
+        var previousValue = select.value;
+        select.innerHTML = '<option value="">-- Pilih Produk --</option>';
+        for (var i = 0; i < produkList.length; i++) {
+          var p = produkList[i];
+          var opt = document.createElement('option');
+          opt.value = p.Kode;
+          opt.textContent = p.Kode + ' - ' + p['Nama Produk'] + ' (Stok: ' + (p.Stok || 0) + ')';
+          select.appendChild(opt);
+        }
+        if (previousValue) select.value = previousValue;
+        if (select.value) loadStokInfo();
+        else document.getElementById('stokInfo').style.display = 'none';
+      });
     }
     
     function loadStokInfo() {
@@ -2884,13 +2808,12 @@
       document.getElementById('hargaBeliSaatIni').textContent = formatRupiah(produk['Harga Beli'] || 0);
       document.getElementById('hargaJualSaatIni').textContent = formatRupiah(produk['Harga Jual'] || 0);
       document.getElementById('satuanStokBaru').textContent = produk.Satuan || 'pcs';
-      google.script.run
-        .withSuccessHandler(function(batches) {
-          var listDiv = document.getElementById('batchDetailList');
-          if (!batches || batches.length === 0) { listDiv.innerHTML = '<div style="color:#999;font-size:0.85rem;">Belum ada batch</div>'; }
-          else { var html = ''; for (var i = 0; i < batches.length; i++) { var b = batches[i]; html += '<div class="batch-item"><span><span class="batch-tag">' + b.batch + '</span> ' + formatRupiah(b.hargaBeli) + ' x ' + b.stok + ' ' + (produk.Satuan || 'pcs') + '</span><span style="color:#999;font-size:0.75rem;">' + formatTanggalDisplay(b.tanggalMasuk) + '</span></div>'; } listDiv.innerHTML = html; }
-        })
-        .getBatchByKode(kode);
+      
+      callServer('getBatchByKode', { kode: kode }, function(batches) {
+        var listDiv = document.getElementById('batchDetailList');
+        if (!batches || batches.length === 0) { listDiv.innerHTML = '<div style="color:#999;font-size:0.85rem;">Belum ada batch</div>'; }
+        else { var html = ''; for (var i = 0; i < batches.length; i++) { var b = batches[i]; html += '<div class="batch-item"><span><span class="batch-tag">' + b.batch + '</span> ' + formatRupiah(b.hargaBeli) + ' x ' + b.stok + ' ' + (produk.Satuan || 'pcs') + '</span><span style="color:#999;font-size:0.75rem;">' + formatTanggalDisplay(b.tanggalMasuk) + '</span></div>'; } listDiv.innerHTML = html; }
+      });
       hitungStokBaru();
     }
     
@@ -2935,71 +2858,56 @@
       
       var data = { kode: kode, nama: produk['Nama Produk'], jumlah: jumlah, hargaBeliBaru: hargaBeliBaru, catatan: catatan, satuan: produk.Satuan || 'pcs', tanggal: tanggalStok };
       
-      google.script.run
-        .withSuccessHandler(function(result) {
-          btn.disabled = false;
-          btn.textContent = '✅ Tambahkan Stok (Batch Baru)';
-          btn.style.opacity = '1';
-          if (result.success) {
-            showToast('✅ Stok berhasil ditambahkan! Batch baru: ' + result.batchId, 'success');
-            document.getElementById('jumlahStokMasuk').value = '';
-            document.getElementById('catatanStok').value = '';
-            loadProdukWithRetry(); 
-            loadPosProduk(); 
-            loadDashboard(); 
-            loadStokProdukSelect(); 
-            loadRiwayatStok(); 
-            loadBatchList(); 
-            loadStokInfo();
-            loadBatchUntukDibatalkan();
-          } else {
-            showToast('❌ Gagal menambahkan stok: ' + (result.error || ''), 'error');
-          }
-        })
-        .withFailureHandler(function(error) {
-          btn.disabled = false;
-          btn.textContent = '✅ Tambahkan Stok (Batch Baru)';
-          btn.style.opacity = '1';
-          console.error('Error tambahStokMasuk:', error);
-          showToast('❌ Error: ' + error.message, 'error');
-        })
-        .tambahStokBatch(data);
+      callServer('tambahStokBatch', data, function(result) {
+        btn.disabled = false;
+        btn.textContent = '✅ Tambahkan Stok (Batch Baru)';
+        btn.style.opacity = '1';
+        if (result.success) {
+          showToast('✅ Stok berhasil ditambahkan! Batch baru: ' + result.batchId, 'success');
+          document.getElementById('jumlahStokMasuk').value = '';
+          document.getElementById('catatanStok').value = '';
+          loadProdukWithRetry(); 
+          loadPosProduk(); 
+          loadDashboard(); 
+          loadStokProdukSelect(); 
+          loadRiwayatStok(); 
+          loadBatchList(); 
+          loadStokInfo();
+          loadBatchUntukDibatalkan();
+        } else {
+          showToast('❌ Gagal menambahkan stok: ' + (result.error || ''), 'error');
+        }
+      });
     }
     
     // ==================== LOAD RIWAYAT STOK ====================
     function loadRiwayatStok() {
-      google.script.run
-        .withSuccessHandler(function(riwayat) {
-          riwayatStok = riwayat || [];
-          var tbody = document.getElementById('riwayatStokTable');
-          if (riwayatStok.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">Belum ada riwayat stok masuk</td></tr>'; return; }
-          var html = '';
-          for (var i = riwayatStok.length - 1; i >= 0; i--) {
-            var r = riwayatStok[i];
-            html += '<tr><td>' + formatTanggalDisplay(r.tanggal) + '</td><td><span class="batch-tag">' + (r.batch || '-') + '</span></td><td>' + (r.nama || '-') + '</td><td><strong>' + (r.jumlah || 0) + '</strong> ' + (r.satuan || 'pcs') + '</td><td>' + (r.hargaBeli ? formatRupiah(r.hargaBeli) : '-') + '</td><td>' + (r.catatan || '-') + '</td></tr>';
-          }
-          tbody.innerHTML = html;
-        })
-        .withFailureHandler(function(error) { console.error('Error loadRiwayatStok:', error); document.getElementById('riwayatStokTable').innerHTML = '<tr><td colspan="6" style="text-align:center;color:red;">❌ Gagal memuat data</td></tr>'; })
-        .getRiwayatStokMasuk();
+      callServer('getRiwayatStokMasuk', {}, function(riwayat) {
+        riwayatStok = riwayat || [];
+        var tbody = document.getElementById('riwayatStokTable');
+        if (riwayatStok.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">Belum ada riwayat stok masuk</td></tr>'; return; }
+        var html = '';
+        for (var i = riwayatStok.length - 1; i >= 0; i--) {
+          var r = riwayatStok[i];
+          html += '<tr><td>' + formatTanggalDisplay(r.tanggal) + '</td><td><span class="batch-tag">' + (r.batch || '-') + '</span></td><td>' + (r.nama || '-') + '</td><td><strong>' + (r.jumlah || 0) + '</strong> ' + (r.satuan || 'pcs') + '</td><td>' + (r.hargaBeli ? formatRupiah(r.hargaBeli) : '-') + '</td><td>' + (r.catatan || '-') + '</td></tr>';
+        }
+        tbody.innerHTML = html;
+      });
     }
     
     // ==================== LOAD BATCH LIST ====================
     function loadBatchList() {
-      google.script.run
-        .withSuccessHandler(function(batches) {
-          batchList = batches || [];
-          var tbody = document.getElementById('batchTable');
-          if (batchList.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">Belum ada batch</td></tr>'; return; }
-          var html = '';
-          for (var i = batchList.length - 1; i >= 0; i--) {
-            var b = batchList[i];
-            html += '<tr><td><span class="batch-tag">' + (b.batch || '-') + '</span></td><td>' + (b.kode || '-') + '</td><td>' + (b.nama || '-') + '</td><td>' + formatRupiah(b.hargaBeli || 0) + '</td><td>' + (b.stok || 0) + ' ' + (b.satuan || 'pcs') + '</td><td>' + formatTanggalDisplay(b.tanggalMasuk) + '</td></tr>';
-          }
-          tbody.innerHTML = html;
-        })
-        .withFailureHandler(function(error) { console.error('Error loadBatchList:', error); document.getElementById('batchTable').innerHTML = '<tr><td colspan="6" style="text-align:center;color:red;">❌ Gagal memuat data</td></tr>'; })
-        .getAllBatch();
+      callServer('getAllBatch', {}, function(batches) {
+        batchList = batches || [];
+        var tbody = document.getElementById('batchTable');
+        if (batchList.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">Belum ada batch</td></tr>'; return; }
+        var html = '';
+        for (var i = batchList.length - 1; i >= 0; i--) {
+          var b = batchList[i];
+          html += '<tr><td><span class="batch-tag">' + (b.batch || '-') + '</span></td><td>' + (b.kode || '-') + '</td><td>' + (b.nama || '-') + '</td><td>' + formatRupiah(b.hargaBeli || 0) + '</td><td>' + (b.stok || 0) + ' ' + (b.satuan || 'pcs') + '</td><td>' + formatTanggalDisplay(b.tanggalMasuk) + '</td></tr>';
+        }
+        tbody.innerHTML = html;
+      });
     }
     
     // ==================== PRODUK ====================
@@ -3020,60 +2928,40 @@
       
       tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">⏳ Memuat data... (percobaan ' + loadAttempts + ')</td></tr>';
       
-      google.script.run
-        .withSuccessHandler(function(produk) {
-          console.log('✅ Data produk diterima:', produk);
-          produkList = produk || [];
-          var tbody = document.getElementById('produkTable');
-          if (!tbody) return;
+      callServer('getProduk', {}, function(produk) {
+        console.log('✅ Data produk diterima:', produk);
+        produkList = produk || [];
+        var tbody = document.getElementById('produkTable');
+        if (!tbody) return;
+        
+        if (produkList.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">📭 Belum ada produk</td></tr>';
+          showDebug('Tidak ada produk ditemukan di database.');
+          return;
+        }
+        
+        var html = '';
+        for (var i = 0; i < produkList.length; i++) {
+          var p = produkList[i];
+          var stok = parseInt(p.Stok) || 0;
+          var minStok = parseInt(p['Minimum Stok']) || 10;
+          var isLowStock = stok <= minStok;
+          var stockColor = isLowStock ? '#f44336' : '#4CAF50';
           
-          produkList = produk || [];
-          
-          if (produkList.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">📭 Belum ada produk</td></tr>';
-            showDebug('Tidak ada produk ditemukan di database.');
-            return;
-          }
-          
-          var html = '';
-          for (var i = 0; i < produkList.length; i++) {
-            var p = produkList[i];
-            var stok = parseInt(p.Stok) || 0;
-            var minStok = parseInt(p['Minimum Stok']) || 10;
-            var isLowStock = stok <= minStok;
-            var stockColor = isLowStock ? '#f44336' : '#4CAF50';
-            
-            html += '<tr>' +
-              '<td><strong>' + (p.Kode || '-') + '</strong></td>' +
-              '<td><strong>' + (p['Nama Produk'] || '-') + '</strong></td>' +
-              '<td>' + (p.Kategori || '-') + '</td>' +
-              '<td>' + formatRupiah(p['Harga Beli'] || 0) + '</td>' +
-              '<td>' + formatRupiah(p['Harga Jual'] || 0) + '</td>' +
-              '<td style="font-weight:bold;color:' + stockColor + ';">' + stok + '</td>' +
-              '<td>' + (p.Satuan || 'pcs') + '</td>' +
-              '</tr>';
-          }
-          tbody.innerHTML = html;
-          hideDebug();
-          console.log('✅ Produk berhasil ditampilkan: ' + produkList.length + ' produk');
-        })
-        .withFailureHandler(function(error) {
-          console.error('❌ Error loadProduk:', error);
-          var tbody = document.getElementById('produkTable');
-          if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:red;">❌ Gagal memuat data: ' + error.message + '</td></tr>';
-          }
-          showDebug('Error: ' + error.message);
-          showToast('❌ Gagal memuat produk: ' + error.message, 'error');
-          
-          if (loadAttempts < maxLoadAttempts) {
-            showDebug('Mencoba ulang dalam 2 detik... (attempt ' + (loadAttempts + 1) + ')');
-            setTimeout(function() {
-              loadProduk();
-            }, 2000);
-          }
-        })
-        .getProduk();
+          html += '<tr>' +
+            '<td><strong>' + (p.Kode || '-') + '</strong></td>' +
+            '<td><strong>' + (p['Nama Produk'] || '-') + '</strong></td>' +
+            '<td>' + (p.Kategori || '-') + '</td>' +
+            '<td>' + formatRupiah(p['Harga Beli'] || 0) + '</td>' +
+            '<td>' + formatRupiah(p['Harga Jual'] || 0) + '</td>' +
+            '<td style="font-weight:bold;color:' + stockColor + ';">' + stok + '</td>' +
+            '<td>' + (p.Satuan || 'pcs') + '</td>' +
+            '</tr>';
+        }
+        tbody.innerHTML = html;
+        hideDebug();
+        console.log('✅ Produk berhasil ditampilkan: ' + produkList.length + ' produk');
+      });
     }
     
     function showTambahProduk() {
@@ -3113,28 +3001,26 @@
           'URL Gambar': document.getElementById('fGambar').value.trim() || ''
         };
         if (!produk.Kode || !produk['Nama Produk']) { showToast('Kode dan Nama Produk wajib diisi!', 'error'); return; }
-        google.script.run
-          .withSuccessHandler(function(result) {
-            if (result) {
-              showToast('✅ Produk berhasil ditambahkan!', 'success');
-              closeModal();
-              loadProdukWithRetry(); 
-              loadPosProduk(); 
-              loadStokProdukSelect();
-              google.script.run
-                .withSuccessHandler(function() {})
-                .tambahStokBatch({
-                  kode: produk.Kode,
-                  nama: produk['Nama Produk'],
-                  jumlah: produk.Stok,
-                  hargaBeliBaru: produk['Harga Beli'],
-                  catatan: 'Stok awal',
-                  satuan: produk.Satuan,
-                  tanggal: getTodayString()
-                });
-            } else { showToast('❌ Gagal menambahkan produk!', 'error'); }
-          })
-          .tambahProduk(produk);
+        
+        callServer('tambahProduk', produk, function(result) {
+          if (result.success) {
+            showToast('✅ Produk berhasil ditambahkan!', 'success');
+            closeModal();
+            loadProdukWithRetry(); 
+            loadPosProduk(); 
+            loadStokProdukSelect();
+            
+            callServer('tambahStokBatch', {
+              kode: produk.Kode,
+              nama: produk['Nama Produk'],
+              jumlah: produk.Stok,
+              hargaBeliBaru: produk['Harga Beli'],
+              catatan: 'Stok awal',
+              satuan: produk.Satuan,
+              tanggal: getTodayString()
+            }, function() {});
+          } else { showToast('❌ Gagal menambahkan produk!', 'error'); }
+        });
       });
     }
     
@@ -3145,41 +3031,38 @@
       var role = currentUser ? currentUser.role : 'kasir';
       var namaUser = currentUser ? currentUser.nama : '';
       
-      google.script.run
-        .withSuccessHandler(function(transaksi) {
-          allTransaksi = transaksi || [];
-          if (allTransaksi.length === 0) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">📭 Belum ada transaksi</td></tr>'; return; }
-          var html = '';
-          for (var i = allTransaksi.length - 1; i >= 0; i--) {
-            var t = allTransaksi[i];
-            var id = t.ID || t['ID Transaksi'] || t['id'] || '-';
-            var tanggal = formatTanggalDisplay(t.Tanggal || t.tanggal || '');
-            var waktu = t.Waktu || t.waktu || '';
-            if (waktu) { tanggal += ' ' + waktu; }
-            var namaPembeli = t['Nama Pembeli'] || t.namaPembeli || '-';
-            var kasir = t.Kasir || t.kasir || '-';
-            var total = parseInt(t.Total || t.total || 0);
-            var status = t.Status || t.status || 'Selesai';
-            
-            var showCancel = false;
-            if (currentUser) {
-              if (currentUser.role === 'admin' || currentUser.role === 'owner') { showCancel = true; }
-              else if (currentUser.role === 'kasir') {
-                if (kasir.toLowerCase() === (currentUser.nama || '').toLowerCase()) { showCancel = true; }
-              }
+      callServer('getTransaksiFiltered', { role: role, namaUser: namaUser }, function(transaksi) {
+        allTransaksi = transaksi || [];
+        if (allTransaksi.length === 0) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">📭 Belum ada transaksi</td></tr>'; return; }
+        var html = '';
+        for (var i = allTransaksi.length - 1; i >= 0; i--) {
+          var t = allTransaksi[i];
+          var id = t.ID || t['ID Transaksi'] || t['id'] || '-';
+          var tanggal = formatTanggalDisplay(t.Tanggal || t.tanggal || '');
+          var waktu = t.Waktu || t.waktu || '';
+          if (waktu) { tanggal += ' ' + waktu; }
+          var namaPembeli = t['Nama Pembeli'] || t.namaPembeli || '-';
+          var kasir = t.Kasir || t.kasir || '-';
+          var total = parseInt(t.Total || t.total || 0);
+          var status = t.Status || t.status || 'Selesai';
+          
+          var showCancel = false;
+          if (currentUser) {
+            if (currentUser.role === 'admin' || currentUser.role === 'owner') { showCancel = true; }
+            else if (currentUser.role === 'kasir') {
+              if (kasir.toLowerCase() === (currentUser.nama || '').toLowerCase()) { showCancel = true; }
             }
-            
-            html += '<tr><td><strong>' + id + '</strong></td><td>' + tanggal + '</td><td>' + namaPembeli + '</td><td>' + kasir + '</td><td>' + formatRupiah(total) + '</td><td><span style="background:#4CAF50;color:white;padding:2px 10px;border-radius:10px;font-size:0.8rem;">' + status + '</span></td><td style="white-space:nowrap;">' +
-              '<button class="btn btn-info btn-sm" onclick="cetakStrukFromHistory(\'' + id + '\')" style="padding:5px 10px;font-size:0.8rem;margin-right:3px;" title="Cetak Struk">🖨️</button>';
-            if (showCancel) {
-              html += '<button class="btn btn-danger btn-sm" onclick="konfirmasiBatalTransaksi(\'' + id + '\')" style="padding:5px 10px;font-size:0.8rem;" title="Batalkan Transaksi">🗑️</button>';
-            }
-            html += '</td></tr>';
           }
-          tbody.innerHTML = html;
-        })
-        .withFailureHandler(function(error) { console.error('❌ Error loadTransaksi:', error); tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:red;">❌ Error: ' + error.message + '</td></tr>'; })
-        .getTransaksiFiltered(role, namaUser);
+          
+          html += '<tr><td><strong>' + id + '</strong></td><td>' + tanggal + '</td><td>' + namaPembeli + '</td><td>' + kasir + '</td><td>' + formatRupiah(total) + '</td><td><span style="background:#4CAF50;color:white;padding:2px 10px;border-radius:10px;font-size:0.8rem;">' + status + '</span></td><td style="white-space:nowrap;">' +
+            '<button class="btn btn-info btn-sm" onclick="cetakStrukFromHistory(\'' + id + '\')" style="padding:5px 10px;font-size:0.8rem;margin-right:3px;" title="Cetak Struk">🖨️</button>';
+          if (showCancel) {
+            html += '<button class="btn btn-danger btn-sm" onclick="konfirmasiBatalTransaksi(\'' + id + '\')" style="padding:5px 10px;font-size:0.8rem;" title="Batalkan Transaksi">🗑️</button>';
+          }
+          html += '</td></tr>';
+        }
+        tbody.innerHTML = html;
+      });
     }
     
     // ==================== CETAK STRUK DARI HISTORY ====================
@@ -3188,40 +3071,37 @@
       for (var i = 0; i < allTransaksi.length; i++) { if (allTransaksi[i].ID === id) { transaksi = allTransaksi[i]; break; } }
       if (!transaksi) { showToast('Transaksi tidak ditemukan!', 'error'); return; }
       
-      google.script.run
-        .withSuccessHandler(function(detail) {
-          if (!detail || detail.length === 0) { showToast('Tidak ada detail transaksi!', 'error'); return; }
-          var items = [];
-          for (var i = 0; i < detail.length; i++) {
-            var item = detail[i];
-            var qty = 0, harga = 0, subtotal = 0, namaProduk = 'Produk';
-            for (var key in item) {
-              var keyLower = key.toLowerCase().trim();
-              if (keyLower === 'qty' || keyLower === 'quantity' || keyLower === 'jumlah') qty = parseInt(item[key]) || 0;
-              if (keyLower === 'harga' || keyLower === 'price') harga = parseInt(item[key]) || 0;
-              if (keyLower === 'subtotal' || keyLower === 'total') subtotal = parseInt(item[key]) || 0;
-              if (keyLower === 'nama produk' || keyLower === 'produk' || keyLower === 'nama') namaProduk = item[key] || 'Produk';
-            }
-            if (qty === 0) qty = parseInt(item['Qty']) || parseInt(item['qty']) || parseInt(item['Quantity']) || 0;
-            if (harga === 0) harga = parseInt(item['Harga']) || parseInt(item['harga']) || parseInt(item['Price']) || 0;
-            if (namaProduk === 'Produk') namaProduk = item['Nama Produk'] || item['nama produk'] || item['Produk'] || item['produk'] || 'Produk';
-            items.push({ nama: namaProduk, harga: harga, qty: qty, subtotal: subtotal || (harga * qty) });
+      callServer('getDetailTransaksi', { idTransaksi: id }, function(detail) {
+        if (!detail || detail.length === 0) { showToast('Tidak ada detail transaksi!', 'error'); return; }
+        var items = [];
+        for (var i = 0; i < detail.length; i++) {
+          var item = detail[i];
+          var qty = 0, harga = 0, subtotal = 0, namaProduk = 'Produk';
+          for (var key in item) {
+            var keyLower = key.toLowerCase().trim();
+            if (keyLower === 'qty' || keyLower === 'quantity' || keyLower === 'jumlah') qty = parseInt(item[key]) || 0;
+            if (keyLower === 'harga' || keyLower === 'price') harga = parseInt(item[key]) || 0;
+            if (keyLower === 'subtotal' || keyLower === 'total') subtotal = parseInt(item[key]) || 0;
+            if (keyLower === 'nama produk' || keyLower === 'produk' || keyLower === 'nama') namaProduk = item[key] || 'Produk';
           }
-          var data = {
-            id: transaksi.ID,
-            tanggal: transaksi.Tanggal || '',
-            waktu: transaksi.Waktu || '',
-            kasir: transaksi.Kasir || 'Admin',
-            total: parseInt(transaksi.Total) || 0,
-            pembayaran: parseInt(transaksi.Pembayaran) || 0,
-            kembalian: parseInt(transaksi.Kembalian) || 0,
-            namaPembeli: transaksi['Nama Pembeli'] || transaksi.namaPembeli || '-',
-            items: items
-          };
-          showStruk(data, true);
-        })
-        .withFailureHandler(function(error) { console.error('❌ Error getDetailTransaksi:', error); showToast('❌ Gagal mengambil detail transaksi!', 'error'); })
-        .getDetailTransaksi(id);
+          if (qty === 0) qty = parseInt(item['Qty']) || parseInt(item['qty']) || parseInt(item['Quantity']) || 0;
+          if (harga === 0) harga = parseInt(item['Harga']) || parseInt(item['harga']) || parseInt(item['Price']) || 0;
+          if (namaProduk === 'Produk') namaProduk = item['Nama Produk'] || item['nama produk'] || item['Produk'] || item['produk'] || 'Produk';
+          items.push({ nama: namaProduk, harga: harga, qty: qty, subtotal: subtotal || (harga * qty) });
+        }
+        var data = {
+          id: transaksi.ID,
+          tanggal: transaksi.Tanggal || '',
+          waktu: transaksi.Waktu || '',
+          kasir: transaksi.Kasir || 'Admin',
+          total: parseInt(transaksi.Total) || 0,
+          pembayaran: parseInt(transaksi.Pembayaran) || 0,
+          kembalian: parseInt(transaksi.Kembalian) || 0,
+          namaPembeli: transaksi['Nama Pembeli'] || transaksi.namaPembeli || '-',
+          items: items
+        };
+        showStruk(data, true);
+      });
     }
     
     // ==================== KONFIRMASI BATAL TRANSAKSI ====================
@@ -3253,24 +3133,17 @@
       if (btn) { btn.disabled = true; btn.textContent = '⏳ Memproses...'; }
       showToast('⏳ Memproses pembatalan transaksi...', 'warning');
       
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (btn) { btn.disabled = false; btn.textContent = '✅ Ya, Batalkan'; }
-          if (result.success) {
-            showToast('✅ ' + result.message, 'success');
-            closeModal();
-            loadTransaksi(); loadDashboard(); loadPosProduk();
-            loadBatchUntukDibatalkan();
-          } else {
-            showToast('❌ Gagal membatalkan transaksi: ' + (result.error || ''), 'error');
-          }
-        })
-        .withFailureHandler(function(error) {
-          if (btn) { btn.disabled = false; btn.textContent = '✅ Ya, Batalkan'; }
-          console.error('❌ Error batalTransaksi:', error);
-          showToast('❌ Error: ' + error.message, 'error');
-        })
-        .batalkanTransaksi(idTransaksi, alasan, userPembatal + ' (' + rolePembatal + ')');
+      callServer('batalkanTransaksi', { idTransaksi: idTransaksi, alasan: alasan, userPembatal: userPembatal + ' (' + rolePembatal + ')' }, function(result) {
+        if (btn) { btn.disabled = false; btn.textContent = '✅ Ya, Batalkan'; }
+        if (result.success) {
+          showToast('✅ ' + result.message, 'success');
+          closeModal();
+          loadTransaksi(); loadDashboard(); loadPosProduk();
+          loadBatchUntukDibatalkan();
+        } else {
+          showToast('❌ Gagal membatalkan transaksi: ' + (result.error || ''), 'error');
+        }
+      });
     }
     
     // ==================== LOAD LOG PEMBATALAN ====================
@@ -3282,19 +3155,16 @@
       var tbody = document.getElementById('logPembatalanTable');
       tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;">⏳ Memuat data...</td></tr>';
       
-      google.script.run
-        .withSuccessHandler(function(logs) {
-          allLogs = logs || [];
-          if (!allLogs || allLogs.length === 0) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;">📭 Belum ada log pembatalan</td></tr>'; return; }
-          var html = '';
-          for (var i = allLogs.length - 1; i >= 0; i--) {
-            var l = allLogs[i];
-            html += '<tr><td>' + formatTanggalDisplay(l.tanggalBatal, true) + '</td><td><strong>' + (l.userPembatal || '-') + '</strong></td><td style="max-width:200px;word-wrap:break-word;font-size:0.85rem;">' + (l.alasan || '-') + '</td><td><strong>' + (l.idTransaksi || '-') + '</strong></td><td>' + (l.kasir || '-') + '</td><td>' + (l.namaPembeli || '-') + '</td><td>' + formatRupiah(l.total || 0) + '</td><td><button class="btn btn-info btn-sm" onclick="lihatDetailLog(\'' + (l.idTransaksi || '') + '\')" style="padding:5px 10px;font-size:0.8rem;">📄</button></td></tr>';
-          }
-          tbody.innerHTML = html;
-        })
-        .withFailureHandler(function(error) { console.error('❌ Error loadLogPembatalan:', error); tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:red;">❌ Gagal memuat data: ' + error.message + '</td></tr>'; })
-        .getLogPembatalan();
+      callServer('getLogPembatalan', {}, function(logs) {
+        allLogs = logs || [];
+        if (!allLogs || allLogs.length === 0) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;">📭 Belum ada log pembatalan</td></tr>'; return; }
+        var html = '';
+        for (var i = allLogs.length - 1; i >= 0; i--) {
+          var l = allLogs[i];
+          html += '<tr><td>' + formatTanggalDisplay(l.tanggalBatal, true) + '</td><td><strong>' + (l.userPembatal || '-') + '</strong></td><td style="max-width:200px;word-wrap:break-word;font-size:0.85rem;">' + (l.alasan || '-') + '</td><td><strong>' + (l.idTransaksi || '-') + '</strong></td><td>' + (l.kasir || '-') + '</td><td>' + (l.namaPembeli || '-') + '</td><td>' + formatRupiah(l.total || 0) + '</td><td><button class="btn btn-info btn-sm" onclick="lihatDetailLog(\'' + (l.idTransaksi || '') + '\')" style="padding:5px 10px;font-size:0.8rem;">📄</button></td></tr>';
+        }
+        tbody.innerHTML = html;
+      });
     }
     
     function lihatDetailLog(idTransaksi) {
@@ -3331,35 +3201,31 @@
         document.getElementById('userTable').innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">Hanya admin yang dapat mengelola user</td></tr>';
         return;
       }
-      google.script.run
-        .withSuccessHandler(function(users) {
-          allUsers = users || [];
-          var tbody = document.getElementById('userTable');
-          if (allUsers.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">Belum ada user</td></tr>'; return; }
-          var html = '';
-          for (var i = 0; i < allUsers.length; i++) {
-            var u = allUsers[i];
-            var statusColor = u.active ? 'green' : 'red';
-            var statusText = u.active ? '✅ Aktif' : '❌ Nonaktif';
-            var roleColor = u.role === 'admin' ? '#4CAF50' : '#ff9800';
-            var actionBtn = u.username !== currentUser.username ?
-              '<button onclick="toggleUser(\'' + u.username + '\')" class="btn ' + (u.active ? 'btn-warning' : 'btn-success') + '" style="padding:5px 10px;font-size:0.8rem;">' + (u.active ? 'Nonaktifkan' : 'Aktifkan') + '</button>' :
-              '<span style="color:#999;">Anda</span>';
-            html += '<tr><td><strong>' + u.username + '</strong></td><td>' + u.nama + '</td><td><span style="background:' + roleColor + ';color:white;padding:2px 10px;border-radius:10px;font-size:0.8rem;">' + u.role + '</span></td><td><span style="color:' + statusColor + ';">' + statusText + '</span></td><td>' + actionBtn + '</td></tr>';
-          }
-          tbody.innerHTML = html;
-        })
-        .getUsers();
+      callServer('getUsers', {}, function(users) {
+        allUsers = users || [];
+        var tbody = document.getElementById('userTable');
+        if (allUsers.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">Belum ada user</td></tr>'; return; }
+        var html = '';
+        for (var i = 0; i < allUsers.length; i++) {
+          var u = allUsers[i];
+          var statusColor = u.active ? 'green' : 'red';
+          var statusText = u.active ? '✅ Aktif' : '❌ Nonaktif';
+          var roleColor = u.role === 'admin' ? '#4CAF50' : '#ff9800';
+          var actionBtn = u.username !== currentUser.username ?
+            '<button onclick="toggleUser(\'' + u.username + '\')" class="btn ' + (u.active ? 'btn-warning' : 'btn-success') + '" style="padding:5px 10px;font-size:0.8rem;">' + (u.active ? 'Nonaktifkan' : 'Aktifkan') + '</button>' :
+            '<span style="color:#999;">Anda</span>';
+          html += '<tr><td><strong>' + u.username + '</strong></td><td>' + u.nama + '</td><td><span style="background:' + roleColor + ';color:white;padding:2px 10px;border-radius:10px;font-size:0.8rem;">' + u.role + '</span></td><td><span style="color:' + statusColor + ';">' + statusText + '</span></td><td>' + actionBtn + '</td></tr>';
+        }
+        tbody.innerHTML = html;
+      });
     }
     
     function toggleUser(username) {
       if (!confirm('Yakin ingin mengubah status user ini?')) return;
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result.success) { showToast('✅ Status user berhasil diubah!', 'success'); loadUsers(); }
-          else { showToast('❌ ' + (result.message || 'Gagal mengubah status user!'), 'error'); }
-        })
-        .toggleUserStatus(username);
+      callServer('toggleUserStatus', { username: username }, function(result) {
+        if (result.success) { showToast('✅ Status user berhasil diubah!', 'success'); loadUsers(); }
+        else { showToast('❌ ' + (result.message || 'Gagal mengubah status user!'), 'error'); }
+      });
     }
     
     // ==================== PROFIL & PENGATURAN ====================
@@ -3373,15 +3239,13 @@
       document.getElementById('profileUsername').textContent = currentUser.username;
       
       // Load info toko
-      google.script.run
-        .withSuccessHandler(function(data) {
-          if (data) {
-            document.getElementById('fNamaToko').value = data.namaToko || '';
-            document.getElementById('fAlamatToko').value = data.alamat || '';
-            document.getElementById('fNoHp').value = data.noHp || '';
-          }
-        })
-        .getInfoToko();
+      callServer('getInfoToko', {}, function(data) {
+        if (data) {
+          document.getElementById('fNamaToko').value = data.namaToko || '';
+          document.getElementById('fAlamatToko').value = data.alamat || '';
+          document.getElementById('fNoHp').value = data.noHp || '';
+        }
+      });
     }
     
     // Simpan Informasi Toko
@@ -3395,25 +3259,17 @@
       btn.textContent = '⏳ Menyimpan...';
       btn.disabled = true;
       
-      google.script.run
-        .withSuccessHandler(function(result) {
-          btn.textContent = '💾 Simpan Informasi Toko';
-          btn.disabled = false;
-          if (result.success) {
-            showToast('✅ Informasi toko berhasil disimpan!', 'success');
-            updateHeaderInfo();
-            // Update cache
-            localStorage.setItem('info_toko', JSON.stringify({ namaToko: namaToko, alamat: alamat, noHp: noHp }));
-          } else {
-            showToast('❌ ' + (result.message || 'Gagal menyimpan!'), 'error');
-          }
-        })
-        .withFailureHandler(function(error) {
-          btn.textContent = '💾 Simpan Informasi Toko';
-          btn.disabled = false;
-          showToast('❌ Error: ' + error.message, 'error');
-        })
-        .saveInfoToko(namaToko, alamat, noHp);
+      callServer('saveInfoToko', { namaToko: namaToko, alamat: alamat, noHp: noHp }, function(result) {
+        btn.textContent = '💾 Simpan Informasi Toko';
+        btn.disabled = false;
+        if (result.success) {
+          showToast('✅ Informasi toko berhasil disimpan!', 'success');
+          updateHeaderInfo();
+          localStorage.setItem('info_toko', JSON.stringify({ namaToko: namaToko, alamat: alamat, noHp: noHp }));
+        } else {
+          showToast('❌ ' + (result.message || 'Gagal menyimpan!'), 'error');
+        }
+      });
     });
     
     // Ganti Password
@@ -3440,25 +3296,18 @@
       btn.textContent = '⏳ Memproses...';
       btn.disabled = true;
       
-      google.script.run
-        .withSuccessHandler(function(result) {
-          btn.textContent = '🔑 Ganti Password';
-          btn.disabled = false;
-          if (result.success) {
-            showToast('✅ Password berhasil diubah!', 'success');
-            document.getElementById('fPasswordLama').value = '';
-            document.getElementById('fPasswordBaru').value = '';
-            document.getElementById('fPasswordBaruKonfirmasi').value = '';
-          } else {
-            showToast('❌ ' + (result.message || 'Gagal mengubah password!'), 'error');
-          }
-        })
-        .withFailureHandler(function(error) {
-          btn.textContent = '🔑 Ganti Password';
-          btn.disabled = false;
-          showToast('❌ Error: ' + error.message, 'error');
-        })
-        .changePassword(currentUser.username, passwordLama, passwordBaru);
+      callServer('changePassword', { username: currentUser.username, passwordLama: passwordLama, passwordBaru: passwordBaru }, function(result) {
+        btn.textContent = '🔑 Ganti Password';
+        btn.disabled = false;
+        if (result.success) {
+          showToast('✅ Password berhasil diubah!', 'success');
+          document.getElementById('fPasswordLama').value = '';
+          document.getElementById('fPasswordBaru').value = '';
+          document.getElementById('fPasswordBaruKonfirmasi').value = '';
+        } else {
+          showToast('❌ ' + (result.message || 'Gagal mengubah password!'), 'error');
+        }
+      });
     });
     
     // ==================== BATAL STOK MASUK ====================
@@ -3473,53 +3322,46 @@
       
       var role = currentUser ? currentUser.role : 'kasir';
       
-      google.script.run
-        .withSuccessHandler(function(data) {
-          batchUntukDibatalkan = data || [];
-          if (batchUntukDibatalkan.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;">📭 Tidak ada batch yang bisa dibatalkan</td></tr>';
-            return;
+      callServer('getBatchUntukDibatalkan', { role: role }, function(data) {
+        batchUntukDibatalkan = data || [];
+        if (batchUntukDibatalkan.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;">📭 Tidak ada batch yang bisa dibatalkan</td></tr>';
+          return;
+        }
+        
+        var html = '';
+        var counter = 0;
+        for (var i = 0; i < batchUntukDibatalkan.length; i++) {
+          var item = batchUntukDibatalkan[i];
+          var dapatDibatalkan = item.dapatDibatalkan;
+          
+          if (dapatDibatalkan) {
+            counter++;
+            var statusHtml = '<span class="badge-success">✅ Bisa Dibatalkan</span>';
+            var aksiHtml = '<button class="btn-batal-stok" onclick="konfirmasiBatalStok(\'' + item.batchId + '\', \'' + item.kode + '\', \'' + item.nama + '\', ' + item.stok + ')" title="Batalkan batch ini">🗑️ Batal</button>';
+          } else {
+            var statusHtml = '<span class="badge-danger">🔒 Tidak Bisa</span>';
+            var aksiHtml = '<span style="color:#999;font-size:0.8rem;">Terpakai ' + (item.stokAwal - item.stok) + ' ' + item.satuan + '</span>';
           }
           
-          var html = '';
-          var counter = 0;
-          for (var i = 0; i < batchUntukDibatalkan.length; i++) {
-            var item = batchUntukDibatalkan[i];
-            var dapatDibatalkan = item.dapatDibatalkan;
-            
-            if (dapatDibatalkan) {
-              counter++;
-              var statusHtml = '<span class="badge-success">✅ Bisa Dibatalkan</span>';
-              var aksiHtml = '<button class="btn-batal-stok" onclick="konfirmasiBatalStok(\'' + item.batchId + '\', \'' + item.kode + '\', \'' + item.nama + '\', ' + item.stok + ')" title="Batalkan batch ini">🗑️ Batal</button>';
-            } else {
-              var statusHtml = '<span class="badge-danger">🔒 Tidak Bisa</span>';
-              var aksiHtml = '<span style="color:#999;font-size:0.8rem;">Terpakai ' + (item.stokAwal - item.stok) + ' ' + item.satuan + '</span>';
-            }
-            
-            html += '<tr>' +
-              '<td><span class="batch-tag">' + item.batchId + '</span></td>' +
-              '<td><strong>' + item.kode + '</strong></td>' +
-              '<td>' + item.nama + '</td>' +
-              '<td>' + formatRupiah(item.hargaBeli) + '</td>' +
-              '<td><strong>' + item.stok + '</strong> ' + item.satuan + '</td>' +
-              '<td>' + formatTanggalDisplay(item.tanggalMasuk) + '</td>' +
-              '<td>' + statusHtml + '</td>' +
-              '<td>' + aksiHtml + '</td>' +
-              '</tr>';
-          }
-          
-          if (counter === 0) {
-            html = '<tr><td colspan="8" style="text-align:center;color:#999;">📭 Tidak ada batch yang bisa dibatalkan</td></tr>';
-          }
-          
-          tbody.innerHTML = html;
-        })
-        .withFailureHandler(function(error) {
-          console.error('❌ Error loadBatchUntukDibatalkan:', error);
-          document.getElementById('batalStokTable').innerHTML = '<tr><td colspan="8" style="text-align:center;color:red;">❌ Gagal memuat data: ' + error.message + '</td></tr>';
-          showToast('❌ Gagal memuat batch: ' + error.message, 'error');
-        })
-        .getBatchUntukDibatalkan(role);
+          html += '<tr>' +
+            '<td><span class="batch-tag">' + item.batchId + '</span></td>' +
+            '<td><strong>' + item.kode + '</strong></td>' +
+            '<td>' + item.nama + '</td>' +
+            '<td>' + formatRupiah(item.hargaBeli) + '</td>' +
+            '<td><strong>' + item.stok + '</strong> ' + item.satuan + '</td>' +
+            '<td>' + formatTanggalDisplay(item.tanggalMasuk) + '</td>' +
+            '<td>' + statusHtml + '</td>' +
+            '<td>' + aksiHtml + '</td>' +
+            '</tr>';
+        }
+        
+        if (counter === 0) {
+          html = '<tr><td colspan="8" style="text-align:center;color:#999;">📭 Tidak ada batch yang bisa dibatalkan</td></tr>';
+        }
+        
+        tbody.innerHTML = html;
+      });
     }
     
     function konfirmasiBatalStok(batchId, kode, nama, stok) {
@@ -3596,42 +3438,32 @@
       
       showToast('⏳ Memproses pembatalan stok...', 'warning');
       
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (btn) { 
-            btn.disabled = false; 
-            btn.textContent = '✅ Ya, Batalkan'; 
-          }
+      callServer('batalkanStokMasuk', { batchId: batchId, alasan: alasan, userPembatal: userPembatal, roleUser: rolePembatal }, function(result) {
+        if (btn) { 
+          btn.disabled = false; 
+          btn.textContent = '✅ Ya, Batalkan'; 
+        }
+        
+        if (result.success) {
+          showToast('✅ ' + result.message, 'success');
+          closeModal();
           
-          if (result.success) {
-            showToast('✅ ' + result.message, 'success');
-            closeModal();
-            
-            loadBatchUntukDibatalkan();
-            loadLogPembatalanStok();
-            loadBatchList();
-            loadProdukWithRetry();
-            loadPosProduk();
-            loadStokProdukSelect();
-            loadDashboard();
-            loadRiwayatStok();
-            
-            setTimeout(function() {
-              showToast('🔄 Data telah diperbarui!', 'success');
-            }, 500);
-          } else {
-            showToast('❌ Gagal membatalkan stok: ' + (result.error || ''), 'error');
-          }
-        })
-        .withFailureHandler(function(error) {
-          if (btn) { 
-            btn.disabled = false; 
-            btn.textContent = '✅ Ya, Batalkan'; 
-          }
-          console.error('❌ Error batalkanStokMasuk:', error);
-          showToast('❌ Error: ' + error.message, 'error');
-        })
-        .batalkanStokMasuk(batchId, alasan, userPembatal, rolePembatal);
+          loadBatchUntukDibatalkan();
+          loadLogPembatalanStok();
+          loadBatchList();
+          loadProdukWithRetry();
+          loadPosProduk();
+          loadStokProdukSelect();
+          loadDashboard();
+          loadRiwayatStok();
+          
+          setTimeout(function() {
+            showToast('🔄 Data telah diperbarui!', 'success');
+          }, 500);
+        } else {
+          showToast('❌ Gagal membatalkan stok: ' + (result.error || ''), 'error');
+        }
+      });
     }
     
     // ==================== LOAD LOG PEMBATALAN STOK ====================
@@ -3658,39 +3490,33 @@
       
       var role = currentUser ? currentUser.role : 'kasir';
       
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result && result.error) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#f44336;">⛔ ' + result.error + '</td></tr>';
-            return;
-          }
-          
-          var logs = result || [];
-          if (!logs || logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">📭 Belum ada log pembatalan stok</td></tr>';
-            return;
-          }
-          
-          var html = '';
-          for (var i = logs.length - 1; i >= 0; i--) {
-            var l = logs[i];
-            html += '<tr>' +
-              '<td>' + formatTanggalDisplay(l.tanggalBatal, true) + '</td>' +
-              '<td><strong>' + (l.userPembatal || '-') + '</strong> <span style="font-size:0.7rem;color:#999;">(' + (l.roleUser || '-') + ')</span></td>' +
-              '<td style="max-width:150px;word-wrap:break-word;font-size:0.85rem;">' + (l.alasan || '-') + '</td>' +
-              '<td><span class="batch-tag">' + (l.batchId || '-') + '</span></td>' +
-              '<td>' + (l.kode || '-') + ' - ' + (l.nama || '-') + '</td>' +
-              '<td><strong>' + (l.stokDibatalkan || 0) + '</strong> ' + (l.satuan || 'pcs') + '</td>' +
-              '<td><button class="btn-lihat-log" onclick="lihatDetailLogStok(\'' + (l.batchId || '') + '\')">📄</button></td>' +
-              '</tr>';
-          }
-          tbody.innerHTML = html;
-        })
-        .withFailureHandler(function(error) {
-          console.error('❌ Error loadLogPembatalanStok:', error);
-          document.getElementById('logPembatalanStokTable').innerHTML = '<tr><td colspan="7" style="text-align:center;color:red;">❌ Gagal memuat data: ' + error.message + '</td></tr>';
-        })
-        .getLogPembatalanStok(role);
+      callServer('getLogPembatalanStok', { role: role }, function(result) {
+        if (result && result.error) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#f44336;">⛔ ' + result.error + '</td></tr>';
+          return;
+        }
+        
+        var logs = result || [];
+        if (!logs || logs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">📭 Belum ada log pembatalan stok</td></tr>';
+          return;
+        }
+        
+        var html = '';
+        for (var i = logs.length - 1; i >= 0; i--) {
+          var l = logs[i];
+          html += '<tr>' +
+            '<td>' + formatTanggalDisplay(l.tanggalBatal, true) + '</td>' +
+            '<td><strong>' + (l.userPembatal || '-') + '</strong> <span style="font-size:0.7rem;color:#999;">(' + (l.roleUser || '-') + ')</span></td>' +
+            '<td style="max-width:150px;word-wrap:break-word;font-size:0.85rem;">' + (l.alasan || '-') + '</td>' +
+            '<td><span class="batch-tag">' + (l.batchId || '-') + '</span></td>' +
+            '<td>' + (l.kode || '-') + ' - ' + (l.nama || '-') + '</td>' +
+            '<td><strong>' + (l.stokDibatalkan || 0) + '</strong> ' + (l.satuan || 'pcs') + '</td>' +
+            '<td><button class="btn-lihat-log" onclick="lihatDetailLogStok(\'' + (l.batchId || '') + '\')">📄</button></td>' +
+            '</tr>';
+        }
+        tbody.innerHTML = html;
+      });
     }
     
     function lihatDetailLogStok(batchId) {
